@@ -1,6 +1,6 @@
-streamlit 
-numpy 
-yfinance 
+streamlit
+numpy
+yfinance
 statsmodels
 matplotlib
-sklearn
+scikit-learn
