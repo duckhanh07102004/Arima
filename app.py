@@ -13,6 +13,11 @@ ticker = st.text_input("Enter stock ticker:", "AAPL")
 start_date = st.date_input("Start date")
 end_date = st.date_input("End date")
 
+# User input for ARIMA parameters
+p = st.number_input("Enter p (autoregressive term):", min_value=0, max_value=10, value=5)
+d = st.number_input("Enter d (difference term):", min_value=0, max_value=2, value=1)
+q = st.number_input("Enter q (moving average term):", min_value=0, max_value=10, value=0)
+
 if st.button('Predict'):
     # Download data
     data = yf.download(ticker, start=start_date, end=end_date)
@@ -21,7 +26,7 @@ if st.button('Predict'):
         st.error("No data found for this ticker.")
     else:
         # ARIMA Model
-        model = ARIMA(data['Close'], order=(5, 1, 0))  # (p, d, q)
+        model = ARIMA(data['Close'], order=(p, d, q))  # Use selected (p, d, q)
         model_fit = model.fit()
 
         # Predictions
