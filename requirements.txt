@@ -1,0 +1,6 @@
+streamlit 
+numpy 
+yfinance 
+statsmodels.tsa.arima.model 
+matplotlib.pyplot 
+sklearn.metrics 
