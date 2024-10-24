@@ -5,7 +5,7 @@ from statsmodels.tsa.arima.model import ARIMA
 import matplotlib.pyplot as plt
 from sklearn.metrics import mean_squared_error
 from datetime import timedelta
-import pandas as pd  # Import pandas
+import pandas as pd
 
 # Streamlit App
 st.title("Stock Price Prediction with ARIMA")
@@ -22,9 +22,9 @@ if ticker and end_date:
     if data.empty:
         st.error("No data found for this ticker.")
     else:
-        # Get the first available date
-        first_date = data.index[0]
-        ten_years_ago = pd.Timestamp(end_date) - timedelta(days=365*10)  # Convert to Timestamp
+        # Get the first available date and localize it to None (tz-naive)
+        first_date = data.index[0].tz_localize(None)
+        ten_years_ago = pd.Timestamp(end_date).tz_localize(None) - timedelta(days=365*10)
 
         # Check if data has less than 10 years
         if pd.Timestamp(first_date) > pd.Timestamp(ten_years_ago):
@@ -37,6 +37,10 @@ if ticker and end_date:
 
         # Allow the user to modify the start date
         start_date = st.date_input("Start date", value=default_start_date)
+
+        # Convert start_date and end_date to timezone-naive
+        start_date = pd.Timestamp(start_date).tz_localize(None)
+        end_date = pd.Timestamp(end_date).tz_localize(None)
 
         # Calculate the time difference between start_date and end_date
         time_difference = (pd.Timestamp(end_date) - pd.Timestamp(start_date)).days
