@@ -7,11 +7,15 @@ from sklearn.metrics import mean_squared_error
 from datetime import timedelta
 import pandas as pd
 
+# List of popular stock tickers (you can add more or load from an external source)
+ticker_list = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "FB", "NVDA", "NFLX", "INTC", "AMD"]
+
 # Streamlit App
 st.title("Stock Price Prediction with ARIMA")
 
-# Input from user
-ticker = st.text_input("Enter stock ticker:", "AAPL")
+# Searchable dropdown for stock tickers
+ticker = st.selectbox("Select stock ticker:", ticker_list)
+
 end_date = st.date_input("End date")
 
 # Download data to get the available date range
