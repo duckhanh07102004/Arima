@@ -7,6 +7,7 @@ from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 import streamlit as st
 import pickle
+import time
 
 # Load tickers from CSV
 @st.cache_data  # Cache this function to avoid reloading on every interaction
@@ -34,6 +35,11 @@ selected_symbol = tickers_df[tickers_df["Display"] == selected_display]["Symbol"
 start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2010-01-01"))
 end_date = st.sidebar.date_input("End Date", pd.Timestamp.today())
 future_days = st.sidebar.slider("Number of Future Days to Predict", 1, 60, 30)
+st.sidebar.subheader("ARIMA Model Configuration")
+p = st.sidebar.number_input("Enter p (autoregressive term):", min_value=0, max_value=10, value=5)
+d = st.sidebar.number_input("Enter d (difference term):", min_value=0, max_value=2, value=1)
+q = st.sidebar.number_input("Enter q (moving average term):", min_value=0, max_value=10, value=0)
+
 
 # Function to download data
 def download_data(ticker, start_date, end_date):
@@ -57,7 +63,7 @@ def preprocess_data(data, dates):
 
 # Function to train ARIMA model
 def train_model(data):
-    model = ARIMA(data, order=(5, 1, 0))  # Adjust order if necessary
+    model = ARIMA(data, order=(p, d, q))  # Adjust order if necessary
     arima_model = model.fit()
     
     # Calculate RMSE on training data
@@ -108,19 +114,25 @@ def main():
     
     if data is None:
         return
-    
+    if st.sidebar.button('Run ARIMA Model'):
+        # Start calculating time
+        start_time = time.time()
     # Train ARIMA model and calculate RMSE
-    model = train_model(data)
-    
-    # Predict future prices
-    future_predictions = predict(model, future_days=future_days)
-    
-    # Inverse transform the predictions to original scale
-    future_pred = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1)).flatten()
-    
-    # Print and plot future predictions
-    print_future_predictions(future_pred, dates[-1])
-    plot_results(scaler.inverse_transform(data.reshape(-1, 1)).flatten(), future_pred, dates, selected_symbol)
+        model = train_model(data)
+        
+        # Predict future prices
+        future_predictions = predict(model, future_days=future_days)
+        
+        # Inverse transform the predictions to original scale
+        future_pred = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1)).flatten()
+        
+       
+        # Print and plot future predictions
+        print_future_predictions(future_pred, dates[-1])
+        plot_results(scaler.inverse_transform(data.reshape(-1, 1)).flatten(), future_pred, dates, selected_symbol)
+        end_time = time.time()  # Kết thúc đo thời gian
+        execution_time = end_time - start_time
+        st.write(f"Execution time : {execution_time:.2f} s")
 
 if __name__ == "__main__":
     main()
