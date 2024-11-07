@@ -1,104 +1,126 @@
-import streamlit as st
 import numpy as np
 import yfinance as yf
-from statsmodels.tsa.arima.model import ARIMA
-import matplotlib.pyplot as plt
-from sklearn.metrics import mean_squared_error
-from datetime import timedelta
 import pandas as pd
+from statsmodels.tsa.arima.model import ARIMA
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+import streamlit as st
+import pickle
 
-# List of popular stock tickers (you can add more or load from an external source)
-ticker_list = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "FB", "NVDA", "NFLX", "INTC", "AMD"]
+# Load tickers from CSV
+@st.cache_data  # Cache this function to avoid reloading on every interaction
+def load_ticker_list():
+    tickers_df = pd.read_csv("symbols_valid_meta.csv")  # Load your own CSV file of tickers
+    tickers_df["Display"] = tickers_df["Symbol"] + " - " + tickers_df["Security Name"]  # Combine symbol and name for display
+    return tickers_df
 
-# Streamlit App
-st.title("Stock Price Prediction with ARIMA")
+# Streamlit configuration
+st.title("Stock Price Prediction using ARIMA")
+st.sidebar.header("User Inputs")
 
-# Searchable dropdown for stock tickers
-ticker = st.selectbox("Select stock ticker:", ticker_list)
+# Load tickers
+tickers_df = load_ticker_list()
+all_ticker_options = tickers_df["Display"].tolist()  # Options for display in dropdown
+all_ticker_symbols = tickers_df["Symbol"].tolist()  # Actual symbols for data retrieval
 
-end_date = st.date_input("End date")
+# User selects a ticker by display name
+selected_display = st.sidebar.selectbox("Choose Stock Ticker", options=all_ticker_options)
 
-# Download data to get the available date range
-if ticker and end_date:
-    data = yf.download(ticker)
+# Retrieve the corresponding symbol from the selected display
+selected_symbol = tickers_df[tickers_df["Display"] == selected_display]["Symbol"].values[0]
 
-    # Check if data is empty
-    if data.empty:
-        st.error("No data found for this ticker.")
-    else:
-        # Get the first available date and localize it to None (tz-naive)
-        first_date = data.index[0].tz_localize(None)
-        ten_years_ago = pd.Timestamp(end_date).tz_localize(None) - timedelta(days=365*10)
+# Additional user inputs
+start_date = st.sidebar.date_input("Start Date", pd.to_datetime("2010-01-01"))
+end_date = st.sidebar.date_input("End Date", pd.Timestamp.today())
+future_days = st.sidebar.slider("Number of Future Days to Predict", 1, 60, 30)
 
-        # Check if data has less than 10 years
-        if pd.Timestamp(first_date) > pd.Timestamp(ten_years_ago):
-            st.warning(f"Data for {ticker} has less than 10 years. Available from {first_date.date()}.")
-            if not st.checkbox("Do you want to continue with the available data?"):
-                st.stop()
+# Function to download data
+def download_data(ticker, start_date, end_date):
+    data = yf.download(ticker, start=start_date, end=end_date)
+    return data['Close'].values, data.index  # Returns price data and dates
 
-        # Set default start_date to the maximum between ten_years_ago or first available date
-        default_start_date = max(ten_years_ago, first_date)
+# Function to preprocess data
+def preprocess_data(data, dates):
+    if len(data) == 0:
+        st.error("No data downloaded. Please check your ticker symbol or date range.")
+        return None, None, None
+    
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled_data = scaler.fit_transform(data.reshape(-1, 1)).flatten()
+    
+    # Save the scaler for inverse transformation
+    with open('scaler.pkl', 'wb') as f:
+        pickle.dump(scaler, f)
+    
+    return scaled_data, scaler, dates
 
-        # Allow the user to modify the start date
-        start_date = st.date_input("Start date", value=default_start_date)
+# Function to train ARIMA model
+def train_model(data):
+    model = ARIMA(data, order=(5, 1, 0))  # Adjust order if necessary
+    arima_model = model.fit()
+    
+    # Calculate RMSE on training data
+    fitted_values = arima_model.fittedvalues
+    mse = mean_squared_error(data, fitted_values)  # Skip first value due to differencing
+    rmse = np.sqrt(mse)
+    st.write(f'RMSE on training data: {rmse:.4f}')
+    
+    # Save the trained ARIMA model
+    with open('stock_arima_model.pkl', 'wb') as f:
+        pickle.dump(arima_model, f)
+    
+    return arima_model
 
-        # Convert start_date and end_date to timezone-naive
-        start_date = pd.Timestamp(start_date).tz_localize(None)
-        end_date = pd.Timestamp(end_date).tz_localize(None)
+# Function to make predictions
+def predict(model, future_days):
+    forecast = model.forecast(steps=future_days)
+    return forecast
 
-        # Calculate the time difference between start_date and end_date
-        time_difference = (pd.Timestamp(end_date) - pd.Timestamp(start_date)).days
-        ten_years_in_days = 365 * 10
+# Function to plot results
+def plot_results(data, forecast, dates, ticker):
+    plt.figure(figsize=(12, 8))
+    plt.plot(dates, data, label='True Prices', color='blue')
+    
+    # Create future dates for the forecast
+    future_dates = pd.date_range(start=dates[-1], periods=len(forecast)+1, freq='B')[1:]
+    plt.plot(future_dates, forecast, label='Future Predictions', linestyle='--', color='green')
+    
+    plt.legend()
+    plt.title(f"{ticker} Price Prediction")
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.grid(True)
+    st.pyplot(plt.gcf())  # Use plt.gcf() to show the current figure in Streamlit
 
-        # Check if the data range is less than 10 years
-        if time_difference < ten_years_in_days:
-            st.warning(f"The selected date range has less than 10 years of data ({time_difference // 365} years).")
+# Function to display future predictions
+def print_future_predictions(future_predictions, end_date):
+    st.write("\nPredicted Prices for the next days:")
+    for i, prediction in enumerate(future_predictions, start=1):
+        next_date = pd.Timestamp(end_date) + pd.DateOffset(days=i)
+        st.write(f"{next_date.date()}: {prediction:.2f}")
 
-        # Display the plot of the stock's historical data
-        st.subheader(f"Historical Data for {ticker}")
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.plot(data['Close'], label='Historical Price', color='blue')
-        ax.set_title(f'Historical Stock Price for {ticker}')
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price')
-        ax.legend()
-        ax.grid()
+# Main function
+def main():
+    # Download and preprocess data
+    data, dates = download_data(selected_symbol, start_date, end_date)
+    data, scaler, dates = preprocess_data(data, dates)
+    
+    if data is None:
+        return
+    
+    # Train ARIMA model and calculate RMSE
+    model = train_model(data)
+    
+    # Predict future prices
+    future_predictions = predict(model, future_days=future_days)
+    
+    # Inverse transform the predictions to original scale
+    future_pred = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1)).flatten()
+    
+    # Print and plot future predictions
+    print_future_predictions(future_pred, dates[-1])
+    plot_results(scaler.inverse_transform(data.reshape(-1, 1)).flatten(), future_pred, dates, selected_symbol)
 
-        # Display historical plot
-        st.pyplot(fig)
-
-        # ARIMA model input section
-        st.subheader("ARIMA Model Configuration")
-        p = st.number_input("Enter p (autoregressive term):", min_value=0, max_value=10, value=5)
-        d = st.number_input("Enter d (difference term):", min_value=0, max_value=2, value=1)
-        q = st.number_input("Enter q (moving average term):", min_value=0, max_value=10, value=0)
-
-        if st.button('Run ARIMA Model'):
-            # Download data within the selected date range
-            data = yf.download(ticker, start=start_date, end=end_date)
-
-            # ARIMA Model
-            model = ARIMA(data['Close'], order=(p, d, q))
-            model_fit = model.fit()
-
-            # Predictions
-            y_predicted = model_fit.predict(start=data.index[0], end=data.index[-1])
-
-            # RMSE
-            rmse = np.sqrt(mean_squared_error(data['Close'], y_predicted))
-
-            # Plot actual vs predicted
-            fig, ax = plt.subplots(figsize=(12, 6))
-            ax.plot(data['Close'], label='Actual Price', color='blue')
-            ax.plot(data.index, y_predicted, label='Predicted Price (ARIMA)', color='orange')
-            ax.set_title(f'Stock Price Prediction for {ticker}')
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Price')
-            ax.legend()
-            ax.grid()
-
-            # Display prediction plot
-            st.pyplot(fig)
-
-            # Display RMSE
-            st.write(f"Root Mean Square Error (RMSE): {rmse}")
+if __name__ == "__main__":
+    main()
