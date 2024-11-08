@@ -104,7 +104,7 @@ def print_future_predictions(future_predictions, end_date):
     st.write("\nPredicted Prices for the next days:")
     for i, prediction in enumerate(future_predictions, start=1):
         next_date = pd.Timestamp(end_date) + pd.DateOffset(days=i)
-        st.write(f"{next_date.date()}: {prediction:.2f}")
+        st.write(f"{next_date.date()}: {prediction}")
 
 # Main function
 def main():
