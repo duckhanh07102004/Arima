@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import streamlit as st
 import pickle
 import time
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
 # Load tickers from CSV
 @st.cache_data  # Cache this function to avoid reloading on every interaction
@@ -70,7 +72,7 @@ def train_model(data):
     fitted_values = arima_model.fittedvalues
     mse = mean_squared_error(data, fitted_values)  # Skip first value due to differencing
     rmse = np.sqrt(mse)
-    st.write(f'RMSE on training data: {rmse:.4f}')
+    st.write(f'RMSE on training data: {rmse}')
     
     # Save the trained ARIMA model
     with open('stock_arima_model.pkl', 'wb') as f:
@@ -95,7 +97,7 @@ def plot_results(data, forecast, dates, ticker):
     plt.legend()
     plt.title(f"{ticker} Price Prediction")
     plt.xlabel('Date')
-    plt.ylabel('Price')
+    plt.ylabel('USD')
     plt.grid(True)
     st.pyplot(plt.gcf())  # Use plt.gcf() to show the current figure in Streamlit
 
@@ -104,16 +106,44 @@ def print_future_predictions(future_predictions, end_date):
     st.write("\nPredicted Prices for the next days:")
     for i, prediction in enumerate(future_predictions, start=1):
         next_date = pd.Timestamp(end_date) + pd.DateOffset(days=i)
-        st.write(f"{next_date.date()}: {prediction:.2f}")
+        st.write(f"{next_date.date()}: {prediction}")
 
 # Main function
 def main():
-    # Download and preprocess data
     data, dates = download_data(selected_symbol, start_date, end_date)
     data, scaler, dates = preprocess_data(data, dates)
     
     if data is None:
         return
+    
+    if st.sidebar.button('Show ACF and PACF'):
+        # Analyze stationarity of the series
+        st.subheader("Stationarity Test for Time Series")
+        
+        result = adfuller(data)
+        st.write("ADF Test p-value:", result[1])
+        
+        if result[1] < 0.05:
+            st.write("The time series is stationary (according to the ADF test).")
+        else:
+            st.write("The time series is non-stationary. Differencing may be required.")
+
+        # Plot ACF and PACF
+        st.subheader("ACF and PACF Plots")
+        fig_acf, ax_acf = plt.subplots(figsize=(12, 6))
+        plot_acf(data, lags=40, ax=ax_acf)
+        st.pyplot(fig_acf)
+
+        fig_pacf, ax_pacf = plt.subplots(figsize=(12, 6))
+        plot_pacf(data, lags=40, ax=ax_pacf)
+        st.pyplot(fig_pacf)
+        # Hướng dẫn chọn tham số
+        st.subheader("Hướng Dẫn Chọn Tham Số ARIMA")
+        st.write("""
+        - **Chọn bậc \( p \) (AR)**: Quan sát biểu đồ PACF. Chọn \( p \) là độ trễ (lag) mà các giá trị PACF bắt đầu cắt giảm về 0.
+        - **Chọn bậc \( d \)**: Dựa trên kết quả kiểm định ADF. Nếu chuỗi không dừng (p-value > 0.05), thử \( d = 1 \) và kiểm tra lại.
+        - **Chọn bậc \( q \) (MA)**: Quan sát biểu đồ ACF. Chọn \( q \) là độ trễ (lag) mà các giá trị ACF bắt đầu cắt giảm về 0.
+        """)
     if st.sidebar.button('Run ARIMA Model'):
         # Start calculating time
         start_time = time.time()
@@ -126,13 +156,13 @@ def main():
         # Inverse transform the predictions to original scale
         future_pred = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1)).flatten()
         
-       
+    
         # Print and plot future predictions
         print_future_predictions(future_pred, dates[-1])
         plot_results(scaler.inverse_transform(data.reshape(-1, 1)).flatten(), future_pred, dates, selected_symbol)
         end_time = time.time()  # Kết thúc đo thời gian
         execution_time = end_time - start_time
-        st.write(f"Execution time : {execution_time:.2f} s")
+        st.write(f"Execution time : {execution_time} s")
 
 if __name__ == "__main__":
     main()
