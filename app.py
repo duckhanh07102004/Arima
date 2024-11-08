@@ -70,7 +70,7 @@ def train_model(data):
     fitted_values = arima_model.fittedvalues
     mse = mean_squared_error(data, fitted_values)  # Skip first value due to differencing
     rmse = np.sqrt(mse)
-    st.write(f'RMSE on training data: {rmse:.4f}')
+    st.write(f'RMSE on training data: {rmse}')
     
     # Save the trained ARIMA model
     with open('stock_arima_model.pkl', 'wb') as f:
