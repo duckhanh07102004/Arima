@@ -95,7 +95,7 @@ def plot_results(data, forecast, dates, ticker):
     plt.legend()
     plt.title(f"{ticker} Price Prediction")
     plt.xlabel('Date')
-    plt.ylabel('Price')
+    plt.ylabel('USD')
     plt.grid(True)
     st.pyplot(plt.gcf())  # Use plt.gcf() to show the current figure in Streamlit
 
