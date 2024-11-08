@@ -132,7 +132,7 @@ def main():
         plot_results(scaler.inverse_transform(data.reshape(-1, 1)).flatten(), future_pred, dates, selected_symbol)
         end_time = time.time()  # Kết thúc đo thời gian
         execution_time = end_time - start_time
-        st.write(f"Execution time : {execution_time:.2f} s")
+        st.write(f"Execution time : {execution_time} s")
 
 if __name__ == "__main__":
     main()
